@@ -4,8 +4,8 @@ const Promise = require('bluebird');
 const BoxSDK = require("box-node-sdk");
 
 exports.handler = (event, context, callback) => {
-    console.log(`Event: ${JSON.stringify(event, null, 2)}`);
-    console.log(`Context: ${JSON.stringify(context, null, 2)}`);
+    console.log(`Event: \n ${JSON.stringify(event, null, 2)}`);
+    console.log(`Context: \n ${JSON.stringify(context, null, 2)}`);
 
     //Get client_id and client_secret from environment variables
     const sdk = new BoxSDK({
@@ -26,7 +26,7 @@ exports.handler = (event, context, callback) => {
     sdk.getTokensAuthorizationCodeGrantAsync(authCode, null)
 
         .then( (response) => {
-            console.log(response);
+            console.log(`Token info: ${JSON.stringify(response)}`);
             return response;
         })
 
@@ -39,7 +39,7 @@ exports.handler = (event, context, callback) => {
         .then( (client) => {
             Promise.promisifyAll(client.files);
             return client.files.getAsync(fileId, {fields: 'id,name,parent,representations'}).then( (fileInfo) => {
-                console.log(`File info: \n ${fileInfo}`);
+                console.log(`File info: \n ${JSON.stringify(fileInfo)}`);
                 const result = {
                     client: client, 
                     fileInfo: fileInfo
@@ -80,7 +80,7 @@ exports.handler = (event, context, callback) => {
             if (representationAvailable) {
                 return client.getAsync(repContentsUrl, null).then( (representationResponse) => {
                     //Buffer of file contents
-                    console.log(`Representation info: \n ${representationResponse}`);
+                    console.log(`Representation info: \n ${JSON.stringify(representationResponse)}`);
                     const result = { 
                         client: client,
                         newFileName: newFileName, //File name with new extension
@@ -103,7 +103,7 @@ exports.handler = (event, context, callback) => {
             Promise.promisifyAll(client.files);
 
             return client.files.uploadFileAsync(parentId, newFileName, fileBuffer).then( (newFileInfo) => {
-                console.log(`Uploaded file info: \n ${newFileInfo}`);
+                console.log(`Uploaded file info: \n ${JSON.stringify(newFileInfo)}`);
                 const result = newFileInfo;
                 return result;
             })
@@ -121,13 +121,13 @@ exports.handler = (event, context, callback) => {
         //Lambda success callback with message to return to AWS API gateway and Box webapp
         .then( (convertedFileInfo) => {
             const result = `${convertedFileInfo.entries[0].name} successfully converted`;
-            console.log(`Success! \n ${result}`);
+            console.log(`Success! \n ${JSON.stringify(result)}`);
             callback(null, result);
         })
 
         //Lambda error callback with message to return to AWS API gateway and Box webapp
         .catch( (error) => {
-            console.log(`Failed :( \n ${error}`);
+            console.log(`Failed :( \n ${JSON.stringify(error)}`);
             const result = `An error occured while converting the file. ${error.message}`;
             console.log(result);
             callback(result, null);
