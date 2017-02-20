@@ -121,13 +121,13 @@ exports.handler = (event, context, callback) => {
         //Lambda success callback with message to return to AWS API gateway and Box webapp
         .then( (convertedFileInfo) => {
             const result = `${convertedFileInfo.entries[0].name} successfully converted`;
-            console.log(result);
+            console.log(`Success! \n ${result}`);
             callback(null, result);
         })
 
         //Lambda error callback with message to return to AWS API gateway and Box webapp
         .catch( (error) => {
-            console.log(error);
+            console.log(`Failed :( \n ${error}`);
             const result = `An error occured while converting the file. ${error.message}`;
             console.log(result);
             callback(result, null);
