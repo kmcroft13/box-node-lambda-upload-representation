@@ -13,14 +13,16 @@ exports.handler = (event, context, callback) => {
         clientSecret: process.env.BOX_CLIENT_SECRET,
     });
 
+    //Convert box-node-sdk functions to Promises
     Promise.promisifyAll(sdk);
 
-    //Get authorization code and file ID from event
-    //Query params from Box to API gateway URL
-    const authCode = event.code;
-    const fileId = event.fileId;
-    const conversionType = event.conversionType;
+    //Get variables from event
+    //Query params from Box callback URL -> AWS API gateway -> AWS Lambda
+    const authCode = event.code; //Authorization code for the user invoking the integration
+    const fileId = event.fileId; //File ID that the integrationw as invoked upon
+    const conversionType = event.conversionType; //conversionType that the user chose from the integration popup
 
+    //Get tokens from auth code passed from webapp integration callback
     sdk.getTokensAuthorizationCodeGrantAsync(authCode, null)
 
         .then( (response) => {
@@ -28,14 +30,16 @@ exports.handler = (event, context, callback) => {
             return response;
         })
 
+        //Create basic BoxSDK client with tokens
         .then( (tokenInfo) => {
             return sdk.getBasicClient(tokenInfo.accessToken);
         })
 
+        //Get info about the Box file that the integration was invoked upon
         .then( (client) => {
             Promise.promisifyAll(client.files);
             return client.files.getAsync(fileId, {fields: 'id,name,parent,representations'}).then( (fileInfo) => {
-                console.log(fileInfo);
+                console.log(`File info: \n ${fileInfo}`);
                 const result = {
                     client: client, 
                     fileInfo: fileInfo
@@ -44,40 +48,44 @@ exports.handler = (event, context, callback) => {
             });
         })
 
+        //Check for available representation and get buffer of representation file contents
         .then( (origFileInfo) => {
-
             const representations = origFileInfo.fileInfo.representations.entries;
             const parentId = origFileInfo.fileInfo.parent.id;
             const origFileName = origFileInfo.fileInfo.name;
             const client = origFileInfo.client;
+            Promise.promisifyAll(client);
             let representationAvailable = false;
             let repContentsUrl;
             let newFileName;
 
+            //Loop through representation entries and find a match for conversionType chosen by user
             for (let entry of representations) {
                 if (entry.representation === conversionType) {
-                    representationAvailable = true
-                    repContentsUrl = entry.links.content.url;
+                    representationAvailable = true //Found a match
+                    repContentsUrl = entry.links.content.url; //URL for representation file contents
+                    
+                    //Remove original file extension and apply new extension for converted file
                     if (conversionType == "pdf") {
                         newFileName = origFileName.substr(0, origFileName.lastIndexOf('.')) + ".pdf";
                     } else if (conversionType == "extracted_text") {
                         newFileName = origFileName.substr(0, origFileName.lastIndexOf('.')) + ".txt";
                     } else {
-                        throw Error(`No ${conversionType} representation available for this file`);
+                        throw Error(`No handler for ${conversionType} conversions`);
                     }
                 }
             }
 
+            //Matching representation found. Get representation file contents.
             if (representationAvailable) {
-                Promise.promisifyAll(client);
                 return client.getAsync(repContentsUrl, null).then( (representationResponse) => {
                     //Buffer of file contents
-                    console.log(representationResponse);
+                    console.log(`Representation info: \n ${representationResponse}`);
                     const result = { 
                         client: client,
-                        newFileName: newFileName,
-                        parentId: parentId,
-                        fileBuffer: representationResponse.body
+                        newFileName: newFileName, //File name with new extension
+                        parentId: parentId, //Parent folder of original file
+                        fileBuffer: representationResponse.body //Representation contents
                     };
                     return result;
                 });
@@ -86,19 +94,22 @@ exports.handler = (event, context, callback) => {
             }
         })
 
+        //Upload the representation to Box as a new file
         .then( (newFileObject) => {
-            const client = newFileObject.client;
             const newFileName = newFileObject.newFileName;
             const fileBuffer = newFileObject.fileBuffer;
             const parentId = newFileObject.parentId;
+            const client = newFileObject.client;
             Promise.promisifyAll(client.files);
 
             return client.files.uploadFileAsync(parentId, newFileName, fileBuffer).then( (newFileInfo) => {
-                console.log(newFileInfo);
+                console.log(`Uploaded file info: \n ${newFileInfo}`);
                 const result = newFileInfo;
                 return result;
             })
+            //Catch upload errors to return friendly message to client
             .catch( (error) => {
+                //If Box error response, throw Node error with Box response as message
                 if (error.response && error.response.body) {
                     throw Error(`${error.response.body.message}.`);
                 } else {
@@ -107,18 +118,18 @@ exports.handler = (event, context, callback) => {
             });
         })
 
+        //Lambda success callback with message to return to AWS API gateway and Box webapp
         .then( (convertedFileInfo) => {
-            console.log(convertedFileInfo);
             const result = `${convertedFileInfo.entries[0].name} successfully converted`;
             console.log(result);
             callback(null, result);
         })
 
+        //Lambda error callback with message to return to AWS API gateway and Box webapp
         .catch( (error) => {
             console.log(error);
             const result = `An error occured while converting the file. ${error.message}`;
             console.log(result);
             callback(result, null);
         });
-
 };
