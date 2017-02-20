@@ -1,0 +1,14 @@
+{
+  "name": "box-node-lambda-upload-representation",
+  "version": "0.1.0",
+  "description": "Box webapp integration that finds a pdf or extracted_text representation for an existing Box file and uploads that representation to a user's Files page.",
+  "main": "index.js",
+  "dependencies": {
+    "box-node-sdk": "^1.3.0",
+    "bluebird": "^3.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "zip": "zip -rMM box-node-lambda-upload-representation index.js node_modules"
+  }
+}
